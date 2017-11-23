@@ -1,0 +1,140 @@
+
+#Assignment: Prediction Assignment Writeup
+Ashok Gupta
+23-11-2017
+
+##1. Overview
+This document is the final report of the Peer Assessment project from Coursera's course Practical Machine Learning, as part of the Specialization in Data Science. It was built in RStudio, using its knitr functions, meant to be published in html format. This analysis meant to be the basis for the course quiz and a prediction assignment writeup. The main goal of the project is to predict the manner in which 6 participants performed some exercise as described below. This is the "classe" variable in the training set. The machine learning algorithm described here is applied to the 20 test cases available in the test data and the predictions are submitted in appropriate format to the Course Project Prediction Quiz for automated grading.
+
+##2. Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har]http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+##3. Data Loading and Exploratory Analysis
+
+###a. Data Source
+The training data for this project are available here:
+[Training Set]<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:
+[Test Set]<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+###b. Environment Setup
+```{r}
+library(caret)
+library(rpart)
+library(knitr)
+```
+
+###c. Data Loading and Cleaning
+```{r}
+TrainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+TestUrl  <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+TrainFile<-"pml-traininig.csv"
+TestFile<-"pml-testing.csv"
+
+# download the datasets
+
+if(!file.exists(TrainFile))
+{
+    download.file(TrainUrl,destfile = TrainFile)
+}
+pmlData <- read.csv(TrainFile)
+if(!file.exists(TestFile))
+{
+    download.file(TestUrl,destfile = TestFile)
+}
+pmlTestData  <- read.csv(TestFile)
+
+# check dimenstions of data
+dim(pmlData)
+```
+
+Lets clean NonZeroVariance and NA fields
+```{r}
+NZV <- nearZeroVar(pmlData)
+pmlDataPreProcessed <- pmlData[,-NZV]
+
+# Clean ALL fields where NA is present in 95+% perc of data
+ALLNA <- sapply(pmlDataPreProcessed, function(x) mean(is.na(x)) > 0.95 )
+pmlDataPreProcessed <- pmlDataPreProcessed[,ALLNA==FALSE]
+
+# Check dimesion of new processed set
+dim(pmlDataPreProcessed)
+# check few rows of dataste
+head(pmlDataPreProcessed)
+
+# Remove identification only fields
+pmlDataPreProcessed <- pmlDataPreProcessed[,-(1:5)]
+```
+
+Partition Data into Test and Train set
+```{r}
+# Partition data into Testing and Training Set
+trIndex = createDataPartition(pmlDataPreProcessed$classe, p=.7, list = FALSE)
+
+# generate datasets
+trainingData <- pmlDataPreProcessed[trIndex,]
+testingData <- pmlDataPreProcessed[-trIndex,]
+
+# check few rows of dataste
+head(trainingData)
+```
+
+##4. Prediction Model Building
+
+Two popular methods will be applied to model the regressions (in the Train dataset) and the best one (with higher accuracy when applied to the Test dataset) will be used for the quiz predictions. The methods are: Random Forests, Decision Tree.
+
+I am not using Generalized Boosted Model, as its taking lot of time on my system.
+
+##a. Random Forests
+```{r}
+# Apply Random Forest
+trnControl= trainControl(method="cv", n=3, verboseIter = FALSE)
+rfModel <- train(classe~., data=trainingData, trControl=trnControl)
+rfModel$finalModel
+
+# Apply predict function and validate
+predictrf <- predict(rfModel, testingData)
+confusionMatrixrf <- confusionMatrix(predictrf, testingData$classe)
+confusionMatrixrf
+## we get 99.7 % accuracy
+
+plot(confusionMatrixrf$table, col=confusionMatrixrf$byClass,, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confusionMatrixrf$overall['Accuracy'], 4)))
+```
+
+##b. Decision Tree
+```{r}
+# model fit
+set.seed(301)
+decTreeModel <- rpart(classe ~ ., data=trainingData, method="class")
+predictDecTree <- predict(decTreeModel, testingData, type="class")
+confMatDecTree <- confusionMatrix(predictDecTree, testingData$classe)
+confMatDecTree
+## It give 73% accuracy
+
+# plot matrix results
+plot(confMatDecTree$table, col = confMatDecTree$byClass, 
+     main = paste("Decision Tree - Accuracy =",
+                  round(confMatDecTree$overall['Accuracy'], 4)))
+```
+
+
+##5. Applying the best Model (rf) to the Test Data
+
+The accuracy of the 3 regression modeling methods above are:
+Random Forest : 0.9968 Decision Tree : 0.73  In that case, the Random Forest model will be applied to predict the 20 quiz results (testing dataset) as shown below.
+
+```{r}
+predictTEST <- predict(rfModel, newdata=pmlTestData)
+predictTEST
+```
+
+
+
+
+
+
+
+
